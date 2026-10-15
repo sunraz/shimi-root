@@ -172,7 +172,7 @@
   <meta content="yes" name="mobile-web-app-capable"/>
   <meta content="black" name="apple-mobile-web-app-status-bar-style"/>
   <meta content="Shimi.io: ניהול בניין" name="apple-mobile-web-app-title"/>
- <script>if(location.pathname==="/human.html"){history.replaceState(null,"","/")}</script>
+ <script>var qp=new URLSearchParams(location.search).get("r");if(qp){history.replaceState(null,"",qp);}else if(location.pathname==="/human.html"){history.replaceState(null,"","/")}</script>
  </head>
  <body>
   <div id="root">
