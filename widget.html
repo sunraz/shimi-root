@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <script>
+   (function () {
+  var proto = XMLHttpRequest.prototype;
+  var open = proto.open, setRequestHeader = proto.setRequestHeader, send = proto.send;
+  var TOKEN_KEY = 'base44_access_token';
+  var storedTokenHeader = function () {
+    try { return 'Bearer ' + localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+  };
+  var forgetStoredToken = function () {
+    try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('token'); } catch (e) {}
+  };
+
+  proto.open = function (method, url) {
+    this.__b44IsAuthCheck = /\/entities\/User\/me(\?|$)/.test(url);
+    return open.apply(this, arguments);
+  };
+
+  proto.setRequestHeader = function (name, value) {
+    if (this.__b44IsAuthCheck && name.toLowerCase() === 'authorization' && value === storedTokenHeader()) {
+      this.__b44SentToken = value;
+    }
+    return setRequestHeader.call(this, name, value);
+  };
+
+  proto.send = function () {
+    this.addEventListener('loadend', function () {
+      var rejectedTokenStillStored = this.status === 401 && this.__b44SentToken === storedTokenHeader();
+      if (rejectedTokenStillStored) forgetStoredToken();
+    });
+    return send.apply(this, arguments);
+  };
+})();
+  </script>
+  <meta charset="utf-8"/>
+  <link href="/assets/img/favicon.png" rel="icon" type="image/png"/>
+  <link href="/assets/img/favicon.png" rel="apple-touch-icon"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <link href="/manifest.json" rel="manifest"/>
+  <title>Shimi</title>
+  <!-- עותק מלא של https://shimi.base44.app/ על השרת העצמאי של רשת שימי (shimi.land), לפי הוראת סאן 14/10 20:12 -->
+  
+<script>
+/* ═══ שכבת העצמאות — ניתוק מלא מבייס44 (שימי פיתוח, 15/10) ═══
+   כל קריאה לבייס44 מיורטת ונענית מקומית:
+   - צ'אט מיני-שימי → מנוע חשיבה חופשי (pollinations), בלי תשלום
+   - קבצים ותמונות → מוגשים מהשרת שלנו
+   - ישויות משתמש → אלמוני (401) בדיוק כמו שהאפליקציה מצפה
+   - פונקציות שטרם הוגרו → תשובה מסודרת ולא קריסה */
+(function(){
+  var OPENING = 'היי! אני שימי 👋 נעים להכיר. במה אפשר לעזור?';
+  var SYS = 'You are Mini-Shimi, the chat agent of the Shimi network (shimi.land), an Israeli network of autonomous AI agents for building management. Reply in the user language (default Hebrew), warm, authentic, concise (1-3 short sentences). Never claim to be a human. Never give investment or financial advice; for personal finance refer to a human advisor. Never invent facts. What you may say about the network: it offers document signing, a media studio, voice services, a phone line, and a store; the public charter is at aidoor.shimi.land.';
+  function jparse(b){ try { return b ? JSON.parse(b) : {}; } catch(e){ return {}; } }
+  function localChat(args){
+    if (args && args.event === 'send_to_shimi_leads') return Promise.resolve({ok:true, stored:true});
+    if (args && args.event === 'activate_installation') return Promise.resolve({ok:true, status:'activated'});
+    if (args && args.event === 'check_status') return Promise.resolve({mode:'active'});
+    var msgs = (args && args.messages) ? args.messages : [];
+    if (!msgs.length){
+      return Promise.resolve({role:'assistant', content:OPENING, offer_whatsapp:false, whatsapp_url:null, data:{reply:OPENING, mode:'active'}});
+    }
+    var payload = {model:'openai', messages:[{role:'system', content:SYS}]};
+    msgs.slice(-10).forEach(function(m){ payload.messages.push({role:(m.role==='assistant'?'assistant':'user'), content:String(m.content||'')}); });
+    return fetch('https://text.pollinations.ai/openai', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var reply = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+        if (!reply) throw new Error('empty');
+        return {role:'assistant', content:reply, offer_whatsapp:false, whatsapp_url:null, data:{reply:reply, mode:'active'}};
+      })
+      .catch(function(){
+        return {role:'assistant', content:'רגע, מנוע החשיבה העצמאי עמוס כרגע. אפשר לנסות שוב עוד רגע? 🙏', offer_whatsapp:false, whatsapp_url:null, data:{reply:'עמוס', mode:'active'}};
+      });
+  }
+  function route(url, body){
+    url = String(url||'');
+    var m = url.match(/\/functions\/([A-Za-z0-9_-]+)/);
+    if (m){
+      var name = m[1], args = jparse(body);
+      if (name === 'chatWithMiniShimi') return localChat(args);
+      if (name === 'registerWidgetInstall') return Promise.resolve({install_id:'sh-ind-'+Math.random().toString(36).slice(2,10)});
+      if (name === 'getShimiStoreItems') return Promise.resolve({items:[], data:{items:[]}});
+      return Promise.resolve({ok:false, error:'independent migration: function '+name+' is not on this server yet'});
+    }
+    if (/\/entities\/User/.test(url)) return Promise.reject(new Error('401'));
+    if (/\/api\/app-logs\//.test(url)) return Promise.resolve({ok:true});
+    return null;
+  }
+  /* fetch */
+  var realFetch = window.fetch ? window.fetch.bind(window) : null;
+  window.fetch = function(input, init){
+    var url = (typeof input === 'string') ? input : (input && input.url) || '';
+    var r = route(url, init && init.body);
+    if (r){
+      return r.then(function(data){ return new Response(JSON.stringify(data), {status:200, headers:{'Content-Type':'application/json'}}); })
+               .catch(function(){ return new Response(JSON.stringify({error:'unauthorized'}), {status:401}); });
+    }
+    return realFetch.apply(null, arguments);
+  };
+  /* XHR (axios) */
+  var realOpen = XMLHttpRequest.prototype.open, realSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function(method, url){
+    this.__url = String(url||''); this.__method = method;
+    return realOpen.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function(body){
+    var r = route(this.__url, body);
+    if (r){
+      var xhr = this;
+      r.then(function(data){ xhrRespond(xhr, 200, data); })
+       .catch(function(){ xhrRespond(xhr, 401, {error:'unauthorized'}); });
+      return;
+    }
+    return realSend.apply(this, arguments);
+  };
+  function xhrRespond(xhr, status, data){
+    var text = (typeof data === 'string') ? data : JSON.stringify(data);
+    function def(k, v){ try { Object.defineProperty(xhr, k, {value:v, configurable:true, writable:true}); } catch(e){} }
+    def('readyState', 4); def('status', status); def('statusText', status === 200 ? 'OK' : 'Error');
+    def('responseText', text); def('response', text); def('responseURL', xhr.__url); def('responseType', '');
+    xhr.getAllResponseHeaders = function(){ return ''; };
+    xhr.getResponseHeader = function(){ return null; };
+    setTimeout(function(){
+      try { xhr.onreadystatechange && xhr.onreadystatechange(); } catch(e){}
+      try { xhr.dispatchEvent(new ProgressEvent('readystatechange')); } catch(e){}
+      try { xhr.dispatchEvent(new ProgressEvent('load')); } catch(e){}
+      try { xhr.onload && xhr.onload(); } catch(e){}
+      try { xhr.dispatchEvent(new ProgressEvent('loadend')); } catch(e){}
+      try { xhr.onloadend && xhr.onloadend(); } catch(e){}
+    }, 30);
+  }
+})();
+</script>
+
+ <script crossorigin="" src="/assets/index-BJDA9CmX.js" type="module">
+  </script>
+  <link crossorigin="" href="/assets/index-CEM3gOYr.css" rel="stylesheet"/>
+  <script type="module">
+   if (window.self === window.top) {
+  let lastPath = "";
+  function getPageNameFromPath(path) {
+    const segments = path.split("/").filter(Boolean);
+    return segments[0] || null;
+  }
+  function trackPageView() {
+    const path = window.location.pathname;
+    if (path === lastPath) return;
+    lastPath = path;
+    const pageName = getPageNameFromPath(path) || "home";
+    const appId = "6a9192e1b5e788f07b101c74";
+    if (!appId) return;
+    fetch(`/api/app-logs/${appId}/log-user-in-app/${pageName}`, {
+      method: "POST",
+    }).catch(() => {});
+  }
+  const originalPushState = history.pushState.bind(history);
+  history.pushState = function (...args) {
+    originalPushState(...args);
+    trackPageView();
+  };
+  const originalReplaceState = history.replaceState.bind(history);
+  history.replaceState = function (...args) {
+    originalReplaceState(...args);
+    trackPageView();
+  };
+  window.addEventListener("popstate", trackPageView);
+  trackPageView();
+}
+  </script>
+  <meta content="yes" name="mobile-web-app-capable"/>
+  <meta content="black" name="apple-mobile-web-app-status-bar-style"/>
+  <meta content="Shimi.io: ניהול בניין" name="apple-mobile-web-app-title"/>
+ <script>if(!location.pathname.startsWith("/widget")){history.replaceState(null,"","/widget")}</script>
+ </head>
+ <body>
+  <div id="root">
+  </div>
+ </body>
+</html>
