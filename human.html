@@ -52,6 +52,67 @@
 (function(){
   var OPENING = 'היי! אני שימי 👋 נעים להכיר. במה אפשר לעזור?';
   var SYS = 'You are Mini-Shimi, the chat agent of the Shimi network (shimi.land), an Israeli network of autonomous AI agents for building management. Reply in the user language (default Hebrew), warm, authentic, concise (1-3 short sentences). Never claim to be a human. Never give investment or financial advice; for personal finance refer to a human advisor. Never invent facts. What you may say about the network: it offers document signing, a media studio, voice services, a phone line, and a store; the public charter is at aidoor.shimi.land.';
+
+  /* ═══ מנוע תמונות עצמאי לחנות (storeItemImage) — Pollinations חינמי ═══
+     פרוטוקול ה-SPA: create → {ok,status:"waiting"} ; פולינג כל 5 שניות → {status:"completed", image_url} */
+  var IMG_JOBS = {};   // key → {state, url, started}
+  var IMG_STORE = {};  // slug/id → item
+  function imgKey(a){ return a.item_id ? ('item:'+a.item_id) : ('cat:'+a.category); }
+  function loadStore(){
+    return fetch('/assets/data/store-items.json').then(function(r){return r.json();}).then(function(d){
+      (d.items||[]).forEach(function(it){ IMG_STORE[it.id]=it; });
+    }).catch(function(){});
+  }
+  function buildPrompt(a){
+    var base = 'Premium product card illustration, dark elegant background, glowing gold and green accents, minimal futuristic UI style, high quality, no text, no letters';
+    if (a.item_id){
+      var it = IMG_STORE[a.item_id];
+      if (it) return base + ', concept: ' + (it.name||'') + ', ' + (it.description||'').slice(0,100);
+    }
+    if (a.category_label) return base + ', concept: ' + a.category_label + ' category of AI tools';
+    return base;
+  }
+  function startImage(a){
+    var key = imgKey(a);
+    var job = IMG_JOBS[key];
+    if (job && (job.state==='waiting' || job.state==='completed')) return job;
+    job = {state:'waiting', url:null, started:Date.now()};
+    IMG_JOBS[key] = job;
+    var seed = Math.floor(Math.random()*1e6);
+    var url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(buildPrompt(a)) + '?width=768&height=768&nologo=true&seed=' + seed;
+    var img = new Image();
+    img.onload = function(){ job.state='completed'; job.url=url; try{localStorage.setItem('shimi_img_'+key, url);}catch(e){} };
+    img.onerror = function(){ job.state='failed'; };
+    img.src = url;
+    return job;
+  }
+  function imageAction(a){
+    if (a.action === 'categories'){
+      var cats = {};
+      try {
+        for (var i=0;i<localStorage.length;i++){
+          var k = localStorage.key(i);
+          if (k && k.indexOf('shimi_img_cat:')===0) cats[k.slice('shimi_img_cat:'.length)] = localStorage.getItem(k);
+        }
+      } catch(e){}
+      return {ok:true, images:cats};
+    }
+    var key = imgKey(a);
+    if (a.action === 'create'){
+      startImage(a);
+      return {ok:true, status:'waiting'};
+    }
+    var job = IMG_JOBS[key];
+    if (!job){
+      try { var saved = localStorage.getItem('shimi_img_'+key); if (saved) return {ok:true, status:'completed', image_url:saved}; } catch(e){}
+      return {ok:true, status:'none'};
+    }
+    if (job.state==='completed') return {ok:true, status:'completed', image_url:job.url};
+    if (job.state==='failed') { delete IMG_JOBS[key]; return {ok:false, status:'none', error:'מנוע התמונות עמוס כרגע, נסה שוב'}; }
+    return {ok:true, status:'waiting'};
+  }
+  loadStore();
+
   function jparse(b){ try { return b ? JSON.parse(b) : {}; } catch(e){ return {}; } }
   function localChat(args){
     if (args && args.event === 'send_to_shimi_leads') return Promise.resolve({ok:true, stored:true});
@@ -80,6 +141,7 @@
     if (m){
       var name = m[1], args = jparse(body);
       if (name === 'chatWithMiniShimi') return localChat(args);
+      if (name === 'storeItemImage') return Promise.resolve(imageAction(args));
       if (name === 'registerWidgetInstall') return Promise.resolve({install_id:'sh-ind-'+Math.random().toString(36).slice(2,10)});
       if (name === 'getShimiStoreItems') return fetch('/assets/data/store-items.json').then(function(r){return r.json();}).then(function(d){return {success:true, items:d.items||[]};})
       return Promise.resolve({ok:false, error:'independent migration: function '+name+' is not on this server yet'});
