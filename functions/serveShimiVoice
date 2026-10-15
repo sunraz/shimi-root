@@ -1,0 +1,37 @@
+/* שימי-קול — גרסה עצמאית (שימי פיתוח, 15/10)
+   מוגש סטטית מהשרת שלנו. מנוע הדיבור: pollinations (חינם, ללא תשלום). */
+(function(){
+  var root = document.getElementById('root');
+  if (!root) return;
+  root.innerHTML =
+    '<div style="max-width:520px;margin:40px auto;padding:28px;font-family:Segoe UI,Arial,sans-serif;direction:rtl;text-align:center;color:#e8ecf4;background:#131826;border:1px solid #232b3d;border-radius:16px">' +
+      '<div style="font-size:22px;font-weight:800;color:#e8b84b;margin-bottom:6px">🎙️ שימי-קול</div>' +
+      '<div style="font-size:13px;color:#8b96ad;margin-bottom:18px">גרסת השרת העצמאי · מנוע דיבור חופשי, ללא תלות בתשלומים</div>' +
+      '<textarea id="shimiVoiceText" placeholder="כתוב כאן משפט ושימי ידבר אותו..." style="width:100%;min-height:90px;background:#0d1118;border:1px solid #232b3d;border-radius:10px;color:#e8ecf4;padding:12px;font-size:15px;direction:rtl;resize:vertical"></textarea>' +
+      '<button id="shimiVoiceBtn" style="margin-top:12px;background:#2a3247;color:#e8ecf4;border:1px solid #232b3d;border-radius:10px;padding:10px 26px;font-size:15px;cursor:pointer">🔊 דברו</button>' +
+      '<div id="shimiVoiceStatus" style="font-size:12.5px;color:#8b96ad;margin-top:12px"></div>' +
+      '<audio id="shimiVoiceAudio" controls style="width:100%;margin-top:14px;display:none"></audio>' +
+      '<div style="font-size:11.5px;color:#5a647a;margin-top:18px;line-height:1.6">שיחות קול מלאות עוברות לשרת העצמאי של רשת שימי.<br/>שימי-קול המלא: קו הטלפון של הרשת פעיל.</div>' +
+    '</div>';
+  var btn = document.getElementById('shimiVoiceBtn');
+  var st = document.getElementById('shimiVoiceStatus');
+  var audio = document.getElementById('shimiVoiceAudio');
+  btn.addEventListener('click', function(){
+    var text = document.getElementById('shimiVoiceText').value.trim();
+    if (!text) { st.textContent = 'כתב קודם משפט כלשהו 🙂'; return; }
+    btn.disabled = true; st.textContent = 'שימי מכין את הקול...';
+    fetch('https://text.pollinations.ai/' + encodeURIComponent(text) + '?model=openai-audio&voice=alloy')
+      .then(function(r){ if (!r.ok) throw new Error('audio'); return r.blob(); })
+      .then(function(b){
+        audio.src = URL.createObjectURL(b);
+        audio.style.display = 'block';
+        audio.play();
+        st.textContent = 'מדבר עכשיו';
+        btn.disabled = false;
+      })
+      .catch(function(){
+        st.textContent = 'מנוע הדיבור עמוס כרגע, נסה שוב עוד רגע';
+        btn.disabled = false;
+      });
+  });
+})();
