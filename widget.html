@@ -59,7 +59,7 @@
     if (args && args.event === 'check_status') return Promise.resolve({mode:'active'});
     var msgs = (args && args.messages) ? args.messages : [];
     if (!msgs.length){
-      return Promise.resolve({role:'assistant', content:OPENING, offer_whatsapp:false, whatsapp_url:null, data:{reply:OPENING, mode:'active'}});
+      return Promise.resolve({role:'assistant', content:OPENING, offer_whatsapp:false, whatsapp_url:null, reply:OPENING, mode:'active', data:{reply:OPENING, mode:'active'}});
     }
     var payload = {model:'openai', messages:[{role:'system', content:SYS}]};
     msgs.slice(-10).forEach(function(m){ payload.messages.push({role:(m.role==='assistant'?'assistant':'user'), content:String(m.content||'')}); });
@@ -68,10 +68,10 @@
       .then(function(j){
         var reply = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
         if (!reply) throw new Error('empty');
-        return {role:'assistant', content:reply, offer_whatsapp:false, whatsapp_url:null, data:{reply:reply, mode:'active'}};
+        return {role:'assistant', content:reply, offer_whatsapp:false, whatsapp_url:null, reply:reply, mode:'active', data:{reply:reply, mode:'active'}};
       })
       .catch(function(){
-        return {role:'assistant', content:'רגע, מנוע החשיבה העצמאי עמוס כרגע. אפשר לנסות שוב עוד רגע? 🙏', offer_whatsapp:false, whatsapp_url:null, data:{reply:'עמוס', mode:'active'}};
+        return {role:'assistant', content:'רגע, מנוע החשיבה העצמאי עמוס כרגע. אפשר לנסות שוב עוד רגע? 🙏', offer_whatsapp:false, whatsapp_url:null, reply:'עמוס', mode:'active', data:{reply:'עמוס', mode:'active'}};
       });
   }
   function route(url, body){
