@@ -81,7 +81,7 @@
       var name = m[1], args = jparse(body);
       if (name === 'chatWithMiniShimi') return localChat(args);
       if (name === 'registerWidgetInstall') return Promise.resolve({install_id:'sh-ind-'+Math.random().toString(36).slice(2,10)});
-      if (name === 'getShimiStoreItems') return Promise.resolve({items:[], data:{items:[]}});
+      if (name === 'getShimiStoreItems') return fetch('/assets/data/store-items.json').then(function(r){return r.json();}).then(function(d){return {success:true, items:d.items||[]};})
       return Promise.resolve({ok:false, error:'independent migration: function '+name+' is not on this server yet'});
     }
     if (/\/entities\/User/.test(url)) return Promise.reject(new Error('401'));
